@@ -1,0 +1,241 @@
+
+#include <U8g2lib.h>
+#include <TinyGPS++.h>
+#include <SPI.h>
+#include <SD.h>
+
+static const uint32_t GPSBaud = 9600;
+unsigned long previousMillis = 0;
+const long interval = 1000; //1 second between logging GPS data to the SD card
+Sd2Card card;
+SdVolume volume;
+SdFile root;
+File dataFile;
+
+const int chipSelect = 0; //here I'm using pin 0 for the sd card data line
+
+TinyGPSPlus gps;
+
+
+
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+
+// setup the terminal (U8G2LOG) and connect to u8g2 for automatic refresh of the display
+// The size (width * height) depends on the selected font and the display
+// assume 4x6 font
+#define U8LOG_WIDTH 32
+#define U8LOG_HEIGHT 4
+uint8_t u8log_buffer[U8LOG_WIDTH*U8LOG_HEIGHT*10];
+U8G2LOG u8g2log;
+
+int gpschar; 
+
+void setup()
+{
+  Serial.begin(GPSBaud); //uncomment to debug
+  Serial1.begin(GPSBaud); //Don't comment this out - it connects the gps data to the QtPy
+  
+
+  u8g2.begin();  
+  u8g2log.begin(U8LOG_WIDTH, U8LOG_HEIGHT, u8log_buffer); //to display raw gps data on the screen
+  u8g2log.setLineHeightOffset(1); // set extra space between lines in pixel, this can be negative
+  u8g2log.setRedrawMode(0);   // 0: Update screen with newline, 1: Update screen for every char  
+
+  Serial.print("Initializing SD card..."); //for the debug
+  if (!SD.begin(0)) {
+      Serial.println("initialization failed!");
+      while (1);
+    }
+  Serial.println("initialization done.");
+  
+}
+
+void loop()
+{
+
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(u8g2_font_u8glib_4_tr);    // u8g2 font 
+   
+
+    u8g2.drawFrame(0, 0, 128,64);  //setup fixed screen info and borders
+    u8g2.drawLine(0, 9, 128,9);
+    u8g2.drawLine(0, 28, 128,28);
+    u8g2.drawStr(2, 7, "TINY GPS LOG");
+    
+    u8g2.drawLine(0, 54, 128,54);
+    u8g2.drawStr(2, 61, "OKUBO HEAVY INDUSTRIES");
+    
+
+    //Read GPS Data
+    
+     while (Serial1.available()>0)  /* Encode data read from GPS while data is available on serial port */
+     {  gpschar = Serial1.read(); //read raw gps data to gpschar
+       // Serial.write(gpschar);  // uncomment to send raw gps over Serial to debug
+        u8g2log.write(gpschar);   // write raw gps data to u8g2log buffer
+        gps.encode(gpschar);      // extract useful info from raw gps data
+      }
+     
+     //u8g2.drawLog(3, 35, u8g2log);     // uncomment to draw the raw gps buffer content in the console
+     
+     double lat_val, lng_val, alt_m_val, spd_knts, crs_deg, spd_mps; 
+     uint8_t hr_val, min_val, sec_val, hr_val_jp, sats_val;
+     bool loc_valid, alt_valid, time_valid, sats_valid;
+     lat_val = gps.location.lat();  /* Get latitude data */
+     loc_valid = gps.location.isValid(); /* Check if valid location data is available */
+     lng_val = gps.location.lng(); /* Get longtitude data */
+     alt_m_val = gps.altitude.meters();  /* Get altitude data in meters */
+     alt_valid = gps.altitude.isValid(); /* Check if valid altitude data is available */
+     hr_val = gps.time.hour(); /* Get hour */
+     min_val = gps.time.minute();  /* Get minutes */
+     sec_val = gps.time.second();  /* Get seconds */
+     time_valid = gps.time.isValid();  /* Check if valid time data is available */
+     sats_valid = gps.satellites.isValid();
+     sats_val = gps.satellites.value();
+     spd_knts = gps.speed.knots();
+     spd_mps = gps.speed.mps();
+     crs_deg = gps.course.deg();
+     // speed.value, speed.knots, speed.mph, speed.mps, speed.kmph are all possible speed formats
+     
+     if (hr_val < 15) { hr_val_jp = hr_val + 9;  // convert UTC to Japan time zone - change according to your time zone
+     //N.B. if you add gps.date.value it will be based on UTC time zone date
+     }
+     else {hr_val_jp = hr_val -15;
+     }
+     
+     if (!loc_valid)
+      {          
+      
+        u8g2.drawStr(3, 16, "LAT : ********");
+        
+        u8g2.drawStr(60, 16, "LON : ********");
+        
+       }
+       else
+       {
+          u8g2.drawStr(3, 16, "LAT :");
+          u8g2.setCursor(22, 16);
+          u8g2.println(lat_val, 6);
+          //Serial.print("Lat = ");
+          //Serial.print(lat_val,6);
+          //Serial.print(" ");
+          
+          u8g2.drawStr(60, 16, "LON :");
+          u8g2.setCursor(79, 16);
+          u8g2.println(lng_val, 6);
+          //Serial.print("Lon = ");
+          //Serial.print(lng_val,6);
+          //Serial.print(" ");
+          
+        }
+        if (!alt_valid)
+        {
+          
+          u8g2.drawStr(3, 24, "ALT : ********");
+        }
+        else
+        {
+           
+          u8g2.drawStr(3, 24, "ALT :");
+          u8g2.setCursor(22, 24);
+          u8g2.println(alt_m_val, 2); 
+          //Serial.print("Alt = ");
+          //Serial.print(alt_m_val, 2);
+          //Serial.print(" ");
+        }
+        
+        if (!sats_valid)
+        {
+          
+          u8g2.drawStr(60, 24, "SAT : **");
+        }
+        else
+        {
+         
+          u8g2.drawStr(60, 24, "SAT :");
+          u8g2.setCursor(79, 24);
+          u8g2.println(sats_val, 1);   
+        }
+        
+        if (!time_valid)
+        {
+          u8g2.drawStr(65, 7, "Time : ********");
+         
+        }
+        else
+        {
+          char time_string[32];
+          sprintf(time_string, "Time:%02d:%02d:%02d", hr_val_jp, min_val, sec_val);
+          u8g2.setCursor(65, 7);
+          u8g2.print(time_string); 
+
+          //code below is to log data to SD card once every interval
+          
+          unsigned long currentMillis = millis();
+          if (currentMillis - previousMillis >= interval) {
+            
+          dataFile = SD.open("GPSLog.txt", FILE_WRITE); //open file on SD card
+          
+          dataFile.print(time_string);  //write comma ddelimited data to SD card file
+          dataFile.print(",");
+          dataFile.print(lat_val, 6);
+          dataFile.print(",");
+          dataFile.print(lng_val, 6);
+          dataFile.print(",");
+          dataFile.print(alt_m_val, 2);
+          dataFile.print(",");
+          dataFile.print(spd_knts, 2);
+          dataFile.print(","); 
+          dataFile.print(spd_mps, 2);
+          dataFile.print(","); 
+          dataFile.print(crs_deg, 2);
+          dataFile.print("\n"); //add line break at end of each round of gps data
+
+          dataFile.close(); //close SD card file
+          previousMillis = currentMillis;
+          }
+          
+          //Serial.print(time_string); 
+        }
+u8g2.setFont(u8g2_font_6x12_tr);
+        if (!sats_valid)
+        {
+          
+          u8g2.drawStr(3, 39, "SPEED : **");
+        }
+        else
+        {
+         
+          //comment out the next 3 lines if you want to diplay raw gps data in the console
+          u8g2.drawStr(3, 39, "SPEED(KNTS):");
+          u8g2.setCursor(85, 39);
+          u8g2.println(spd_knts, 2); 
+          //Serial.print("Spd knts= ");
+          //Serial.print(spd_knts, 2);
+          //Serial.print(" ");
+          //Serial.print("Spd mps= ");
+          //Serial.print(spd_mps, 2);
+          //Serial.print(" ");
+          
+        }
+
+        if (!sats_valid)
+        {
+          
+          u8g2.drawStr(3, 51, "HEADING : **");
+        }
+        else
+        {
+         
+          //comment out the next 3 lines if you want to diplay raw gps data in the console
+          u8g2.drawStr(3, 51, "HEADING :");
+          u8g2.setCursor(85, 51);
+          u8g2.println(crs_deg, 2); 
+          //Serial.print("Crs = ");
+          //Serial.print(crs_deg, 2);
+          //Serial.print("  \n");
+        }    
+  } while ( u8g2.nextPage() );
+        
+
+}
