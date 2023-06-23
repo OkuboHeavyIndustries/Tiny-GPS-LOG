@@ -32,7 +32,7 @@ int gpschar;
 
 void setup()
 {
-  Serial.begin(GPSBaud); //uncomment to debug
+  //Serial.begin(GPSBaud); //uncomment to debug
   Serial1.begin(GPSBaud); //Don't comment this out - it connects the gps data to the QtPy
   
 
@@ -41,12 +41,12 @@ void setup()
   u8g2log.setLineHeightOffset(1); // set extra space between lines in pixel, this can be negative
   u8g2log.setRedrawMode(0);   // 0: Update screen with newline, 1: Update screen for every char  
 
-  Serial.print("Initializing SD card..."); //for the debug
+  //Serial.print("Initializing SD card..."); //for the debug
   if (!SD.begin(0)) {
-      Serial.println("initialization failed!");
+     // Serial.println("initialization failed!");
       while (1);
     }
-  Serial.println("initialization done.");
+  //Serial.println("initialization done.");
   
 }
 
